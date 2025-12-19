@@ -1,5 +1,66 @@
 # Changelog - FSolar Plugin Modificado
 
+## Versão 1.6.2 - Cálculo de Duração em Standby (2024-12-19)
+
+### 🎯 Melhoria: time_remaining em standby agora considera consumo parasítico
+
+**Problema identificado:**
+- Em standby, bateria tem consumo parasítico (autoconsumo)
+- Exemplo: -27W (BMS, inversores, controladores)
+- v1.6.1 retornava 0, ignorando esse consumo
+- Não indicava quanto tempo bateria duraria
+
+**Solução implementada:**
+```
+Em standby:
+- Detecta consumo atual (bmsPower, emsPower, batDisPower)
+- Calcula: Tempo = Energia disponível ÷ Consumo
+- Retorna duração real em horas
+```
+
+**Exemplo:**
+```yaml
+# Antes (v1.6.1)
+sensor.time_remaining: 0.0 h  ❌
+
+# Depois (v1.6.2)
+sensor.time_remaining: 40.0 h  ✅
+# Cálculo: 1.08 kWh ÷ 27W = 40 horas
+```
+
+### 📝 Casos Especiais
+
+**Consumo > 5W:**
+- Calcula duração real
+- Exemplo: 27W → 40 horas
+
+**Consumo < 5W:**
+- Retorna 999.9 horas
+- Indica duração muito longa (desprezível)
+
+**Sem dados de consumo:**
+- Retorna 999.9 horas
+- Indica sem autodescarga significativa
+
+### 📝 Mudanças Técnicas
+
+**Arquivo Modificado:** `sensor.py` (linha ~241)
+
+**Lógica adicionada:**
+- Detecção de consumo em standby
+- Cálculo de duração baseado em potência
+- Threshold de 5W para consumos desprezíveis
+
+### 📚 Documentação
+
+**Novo arquivo:** `BUGFIX_v1.6.2.md`
+- Explicação detalhada do cálculo
+- Exemplos reais
+- Casos de uso
+- Automações sugeridas
+
+---
+
 ## Versão 1.6.1 - Correção de Bugs Críticos (2024-12-19)
 
 ### 🐛 Bugs Corrigidos

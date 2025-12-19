@@ -238,10 +238,43 @@ class FSolarSensor(CoordinatorEntity, RestoreEntity, SensorEntity):
                     self._device_id, capacity_kwh
                 )
             
-            # Se em standby, retornar 0 (não está carregando nem descarregando)
+            # Se em standby, calcular tempo baseado em consumo parasítico
             if charging_state == 0:
-                _LOGGER.debug("Device %s in standby, returning 0 (no charge/discharge)", self._device_id)
-                return 0.0
+                # Em standby pode haver consumo parasítico (autoconsumo, inversores, BMS)
+                # Verificar potência atual
+                standby_power = data.get("bmsPower") or data.get("emsPower") or data.get("batDisPower")
+                
+                if standby_power:
+                    try:
+                        standby_power_w = abs(float(standby_power))
+                        
+                        # Se há consumo significativo (> 5W), calcular tempo de duração
+                        if standby_power_w > 5:
+                            # Energia disponível em Wh
+                            energy_available_wh = (soc / 100) * capacity_kwh * 1000
+                            
+                            # Tempo até esvaziar = Energia disponível / Potência de consumo
+                            time_remaining_hours = energy_available_wh / standby_power_w
+                            
+                            _LOGGER.info(
+                                "Device %s - STANDBY mode: %.1f Wh available / %.1f W consumption = %.1f hours",
+                                self._device_id, energy_available_wh, standby_power_w, time_remaining_hours
+                            )
+                            
+                            return round(time_remaining_hours, 1)
+                        else:
+                            # Consumo muito baixo (< 5W), considerar duração muito longa
+                            _LOGGER.debug(
+                                "Device %s - STANDBY with very low consumption: %.1f W",
+                                self._device_id, standby_power_w
+                            )
+                            return 999.9  # Indica duração muito longa
+                    except (ValueError, TypeError, ZeroDivisionError) as err:
+                        _LOGGER.debug("Error calculating standby time: %s", err)
+                
+                # Sem dados de consumo em standby
+                _LOGGER.debug("Device %s in standby, no power consumption data", self._device_id)
+                return 999.9  # Sem consumo detectado = duração indefinida
             
             # PRIORIDADE 1: Tentar cálculo por CORRENTE (mais preciso)
             if charging_state == 2:  # Descarregando
